@@ -76,13 +76,18 @@ def get_dest_tables(statement):
 
 def get_from_identifier_list(statement, idx=-1):
     idx, _ = statement.token_next_by(m=(T.Keyword, "from"), idx=idx)
-    if not idx:
-        return []
-    _, idf_ls = statement.token_next_by(i=C.TokenList, idx=idx)
-    if isinstance(idf_ls, C.IdentifierList):
-        return [idf for idf in idf_ls.get_sublists()]
+    if idx is None:
+        if (t := statement.token_next_by(i=C.Function))[0]:
+            t = _get_content_identifiers(t[1], t[0])
+            return get_from_identifier_list(t[1], t[0])
+        else:
+            return []
     else:
-        return [idf_ls]
+        _, idf_ls = _get_content_identifiers(statement, idx)
+        if isinstance(idf_ls, C.IdentifierList):
+            return [idf for idf in idf_ls.get_sublists()]
+        else:
+            return [idf_ls]
 
 
 def get_join_idfs(statement, idx=-1):
@@ -96,6 +101,19 @@ def get_join_idfs(statement, idx=-1):
         return [idf_ls]
 
 
+def _get_content_identifiers(statement, idx):
+    idx1, t1 = statement.token_next_by(i=C.TokenList, idx=idx)
+    idx2, t2 = statement.token_next_by(t=T.Name.Placeholder, idx=idx)
+    if idx1 is None and idx2 is None:
+        return (None, None)
+    elif idx2 is None:
+        return (idx1, t1)
+    elif idx1 is None:
+        return (idx2, C.Identifier([t2]))
+    else:
+        return (idx1, t1) if idx1 < idx2 else (idx2, C.Identifier([t2]))
+
+
 def _get_insert_into_set(statement):
     if statement.get_type() != "INSERT":
         return set()
@@ -105,7 +123,7 @@ def _get_insert_into_set(statement):
         return "".join([t.value for t in idf.tokens[:idx]])
 
     idx, _ = statement.token_next_by(m=(T.Keyword.DML, "insert"))
-    _, idf_ls = statement.token_next_by(i=C.TokenList, idx=idx)
+    _, idf_ls = _get_content_identifiers(statement, idx)
     if isinstance(idf_ls, C.IdentifierList):
         return {get_real_name_of_insert(idf) for idf in idf_ls.get_sublists()}
     else:
