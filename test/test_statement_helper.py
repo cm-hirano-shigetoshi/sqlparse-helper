@@ -28,7 +28,7 @@ def test_insert_into_01():
     ans = s.get_from_identifier_list(statement)
     assert ans[0].value == "aaa"
     assert ans[1].value == "schema.phys_t_3"
-    ans = s.get_join_idfs(statement)
+    ans = s.get_join_identifier_list(statement)
     assert ans[0].value == "schema.phys_t_4"
 
 

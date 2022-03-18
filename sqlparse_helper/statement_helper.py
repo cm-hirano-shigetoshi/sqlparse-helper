@@ -84,26 +84,38 @@ def get_dest_tables(statement):
 
 def get_from_identifier_list(statement, idx=-1):
     def _get_from_content(statement, idx):
-        return statement.token_next(idx)
+        _, token = statement.token_next(idx)
+        if isinstance(token, C.IdentifierList):
+            return token
+        elif isinstance(token, C.Identifier):
+            return C.IdentifierList([token])
+        else:
+            identifier = C.Identifier([token])
+            return C.IdentifierList([identifier])
 
     statement = get_select_statement(statement)
     idx, _ = statement.token_next_by(m=(T.Keyword, "from"), idx=idx)
-    idx, idf_ls = _get_from_content(statement, idx)
-    if isinstance(idf_ls, C.IdentifierList):
-        return [idf for idf in idf_ls.get_sublists()]
-    else:
-        return [idf_ls]
+    identifiers = _get_from_content(statement, idx)
+    return [idf for idf in identifiers.get_sublists()]
 
 
-def get_join_idfs(statement, idx=-1):
+def get_join_identifier_list(statement, idx=-1):
+    def _get_join_content(statement, idx):
+        _, token = statement.token_next(idx)
+        if isinstance(token, C.IdentifierList):
+            return token
+        elif isinstance(token, C.Identifier):
+            return C.IdentifierList([token])
+        else:
+            identifier = C.Identifier([token])
+            return C.IdentifierList([identifier])
+
+    statement = get_select_statement(statement)
     idx, _ = statement.token_next_by(m=(T.Keyword, "join$", True), idx=idx)
     if not idx:
         return []
-    _, idf_ls = statement.token_next_by(i=C.TokenList, idx=idx)
-    if isinstance(idf_ls, C.IdentifierList):
-        return [idf for idf in idf_ls.get_sublists()]
-    else:
-        return [idf_ls]
+    identifiers = _get_join_content(statement, idx)
+    return [idf for idf in identifiers.get_sublists()]
 
 
 def _get_content_identifiers(statement, idx):
@@ -189,7 +201,7 @@ def _collect_source_tables_local(statement):
         else:
             source_set.add(get_real_name_of_from(idf))
 
-    for idf in get_join_idfs(statement):
+    for idf in get_join_identifier_list(statement):
         if is_subquery(idf):
             source_set |= collect_source_tables(get_identifier_content(idf))
         else:
