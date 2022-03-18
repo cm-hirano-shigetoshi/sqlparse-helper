@@ -88,8 +88,74 @@ def test_create_table_02():
     assert ans == "CREATE TEMP TABLE"
 
 
+def test_s_01():
+    sql = """
+        insert into :table (
+        select
+          sub
+        from (
+          select
+            *,
+            row_number() over (
+              partition by
+                sub
+              order by
+                file_timestamp desc nulls last
+            ) as row_num
+          from
+            :table_tmp
+          ) a
+        where
+          row_num = 1
+        );
+    """
+    statements = sqlparse.parse(sql)
+    statement = statements[0]
+    ans = s.get_detailed_type(statement)
+    assert ans == "INSERT INTO SELECT"
+    ans = s.get_dest_tables(statement)
+    assert ans == {":table"}
+    ans = s.get_from_identifier_list(statement)
+    assert ans[0].get_name() == "a"
+    ans = s.collect_source_tables(statement)
+    assert ans == {":table_tmp"}
+
+
+def test_s_02():
+    sql = """
+        insert into :table
+        select
+          sub
+        from (
+          select
+            *,
+            row_number() over (
+              partition by
+                sub
+              order by
+                file_timestamp desc nulls last
+            ) as row_num
+          from
+            :table_tmp
+          ) a
+        where
+          row_num = 1
+        ;
+    """
+    statements = sqlparse.parse(sql)
+    statement = statements[0]
+    ans = s.get_detailed_type(statement)
+    assert ans == "INSERT INTO SELECT"
+    ans = s.get_from_identifier_list(statement)
+    assert ans[0].get_name() == "a"
+    ans = s.collect_source_tables(statement)
+    assert ans == {":table_tmp"}
+
+
 if __name__ == "__main__":
     test_insert_into_01()
     test_insert_into_02()
     test_create_table_01()
     test_create_table_02()
+    test_s_01()
+    test_s_02()

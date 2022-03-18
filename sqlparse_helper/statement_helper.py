@@ -3,6 +3,14 @@ from sqlparse import sql as C
 from sqlparse import tokens as T
 
 
+def get_select_statement(statement, idx=-1):
+    idx, _ = statement.token_next_by(m=(T.Keyword, "from"), idx=idx)
+    if idx is not None:
+        return statement
+    if (t := statement.token_next_by(i=C.Function))[0] is not None:
+        return list(t[1].get_sublists())[0]
+
+
 def get_detailed_type(statement):
     query_type = statement.get_type()
     if query_type in ("UNKNOWN", "SELECT"):
@@ -75,19 +83,16 @@ def get_dest_tables(statement):
 
 
 def get_from_identifier_list(statement, idx=-1):
+    def _get_from_content(statement, idx):
+        return statement.token_next(idx)
+
+    statement = get_select_statement(statement)
     idx, _ = statement.token_next_by(m=(T.Keyword, "from"), idx=idx)
-    if idx is None:
-        if (t := statement.token_next_by(i=C.Function))[0]:
-            t = _get_content_identifiers(t[1], t[0])
-            return get_from_identifier_list(t[1], t[0])
-        else:
-            return []
+    idx, idf_ls = _get_from_content(statement, idx)
+    if isinstance(idf_ls, C.IdentifierList):
+        return [idf for idf in idf_ls.get_sublists()]
     else:
-        _, idf_ls = _get_content_identifiers(statement, idx)
-        if isinstance(idf_ls, C.IdentifierList):
-            return [idf for idf in idf_ls.get_sublists()]
-        else:
-            return [idf_ls]
+        return [idf_ls]
 
 
 def get_join_idfs(statement, idx=-1):
@@ -149,6 +154,7 @@ def _get_create_table_set(statement):
 
 
 def _collect_source_tables_recursively(statement):
+    statement = get_select_statement(statement)
     with_source_tables = _collect_with_source_tables(statement)
     source_tables = _expand_with(
         _collect_source_tables_local(statement), with_source_tables
@@ -166,9 +172,13 @@ def _collect_source_tables_local(statement):
         return idf.token_first()
 
     def is_subquery(idf):
-        return isinstance(get_identifier_content(idf), C.Parenthesis)
+        return isinstance(idf, C.TokenList) and isinstance(
+            get_identifier_content(idf), C.Parenthesis
+        )
 
     def get_real_name_of_from(idf):
+        if sqlparse.utils.imt(idf, t=T.Name.Placeholder):
+            return idf.value
         idx, _ = idf.token_next_by(t=T.Whitespace)
         return "".join([t.value for t in idf.tokens[:idx]])
 
